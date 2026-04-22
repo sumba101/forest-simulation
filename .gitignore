@@ -3,3 +3,7 @@
 
 # Planning docs
 plan.txt
+
+# Zig build artifacts
+sim/.zig-cache/
+sim/zig-out/
