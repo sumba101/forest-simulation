@@ -19,6 +19,7 @@ pub fn main(init: std.process.Init) !void {
 
     var grid = try Grid.init(arena, W, H);
     defer grid.deinit();
+    fire.scatter(&grid, rng);
 
     var buf: [W * H * 8]u8 = undefined;
     var file_writer: Io.File.Writer = .init(.stdout(), io, &buf);

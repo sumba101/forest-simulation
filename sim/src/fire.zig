@@ -4,9 +4,21 @@ const Grid = grid_mod.Grid;
 const Cell = grid_mod.Cell;
 
 const ignition_chance: f32 = 0.4;
-const lightning_chance: f32 = 0.001;
+const lightning_chance: f32 = 0.03;
 const fuel_min: u8 = 4;
 const fuel_max: u8 = 10;
+
+// Called once at startup to scatter an initial mixed-age forest.
+// ~30% empty, ~30% grass, ~20% sapling, ~20% tree.
+pub fn scatter(g: *Grid, rng: std.Random) void {
+    for (g.cells) |*cell| {
+        const roll = rng.float(f32);
+        cell.* = if (roll < 0.30) .empty
+        else if (roll < 0.60) .grass
+        else if (roll < 0.80) .sapling
+        else .tree;
+    }
+}
 
 pub fn tick(g: *Grid, rng: std.Random) void {
     growStep(g, rng);

@@ -20,7 +20,7 @@ pub const Grid = struct {
         const size = width * height;
         const cells = try allocator.alloc(Cell, size);
         const fuel = try allocator.alloc(u8, size);
-        @memset(cells, .tree);
+        @memset(cells, .empty);
         @memset(fuel, 0);
         return .{
             .cells = cells,
