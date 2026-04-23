@@ -7,7 +7,7 @@ const params = @import("params.zig");
 pub fn scatter(g: *Grid, rng: std.Random) void {
     for (g.cells) |*cell| {
         const roll = rng.float(f32);
-        cell.* = if (roll < 0.45) .empty
+        cell.* = if (roll < 0.65) .empty
         else if (roll < 0.85) .grass
         else if (roll < 0.97) .sapling
         else .tree;
