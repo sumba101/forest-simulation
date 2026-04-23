@@ -22,8 +22,8 @@ pub var p: Params = .{
     .sapling_spread_chance = 0.002,
     .sapling_random_chance = 0.0003,
     .sapling_to_tree      = 0.0008,
-    .ignition_chance      = 0.4,
+    .ignition_chance      = 0.12,
     .lightning_chance     = 0.03,
-    .fuel_min             = 4,
-    .fuel_max             = 10,
+    .fuel_min             = 2,
+    .fuel_max             = 6,
 };
