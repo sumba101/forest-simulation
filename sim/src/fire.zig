@@ -111,5 +111,5 @@ fn ignite(g: *Grid, i: usize, rng: std.Random) void {
 }
 
 fn isFlammable(cell: Cell) bool {
-    return cell == .grass or cell == .sapling or cell == .tree;
+    return cell == .sapling or cell == .tree;
 }
