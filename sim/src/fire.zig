@@ -15,8 +15,14 @@ pub fn scatter(g: *Grid, rng: std.Random) void {
 }
 
 pub fn tick(g: *Grid, rng: std.Random) void {
-    growStep(g, rng);
-    seedStep(g, rng);
+    const burning = for (g.cells) |cell| {
+        if (cell == .burning) break true;
+    } else false;
+
+    if (!burning) {
+        growStep(g, rng);
+        seedStep(g, rng);
+    }
     lightningStep(g, rng);
     fireStep(g, rng);
 }
@@ -111,5 +117,5 @@ fn ignite(g: *Grid, i: usize, rng: std.Random) void {
 }
 
 fn isFlammable(cell: Cell) bool {
-    return cell == .sapling or cell == .tree;
+    return cell == .grass or cell == .sapling or cell == .tree;
 }
