@@ -5,117 +5,110 @@ const Cell = grid_mod.Cell;
 const params = @import("params.zig");
 
 pub fn scatter(g: *Grid, rng: std.Random) void {
+    g.burning_count = 0;
+    g.fire_current_size = 0;
     for (g.cells) |*cell| {
-        const roll = rng.float(f32);
-        cell.* = if (roll < 0.65) .empty
-        else if (roll < 0.85) .grass
-        else if (roll < 0.97) .sapling
-        else .tree;
+        cell.* = if (rng.float(f32) < 0.25) .tree else .empty;
     }
 }
 
 pub fn tick(g: *Grid, rng: std.Random) void {
-    const burning = for (g.cells) |cell| {
-        if (cell == .burning) break true;
-    } else false;
+    g.tick_count += 1;
 
-    if (!burning) {
+    const can_grow = !params.p.pause_on_fire or g.burning_count == 0;
+    if (can_grow) {
         growStep(g, rng);
-        seedStep(g, rng);
+        lightningStep(g, rng);
     }
-    lightningStep(g, rng);
     fireStep(g, rng);
+
+    if (g.burning_count == 0 and g.fire_current_size > 0) {
+        g.recordFireEvent();
+    }
 }
 
-// Handles cell-state transitions that don't involve seeding or fire.
+// Geometric-skip growth: for each per-cell event with probability p,
+// sample the gap to the next "hit" instead of rolling for every cell.
+// This collapses ~N RNG calls per tick into ~N*p, a 50–100× speedup at
+// realistic growth rates.
 fn growStep(g: *Grid, rng: std.Random) void {
-    const p = params.p;
-    for (g.cells) |*cell| {
-        switch (cell.*) {
-            .empty   => if (rng.float(f32) < p.empty_to_grass)  { cell.* = .grass; },
-            .sapling => if (rng.float(f32) < p.sapling_to_tree) { cell.* = .tree; },
-            .ash     => if (rng.float(f32) < p.ash_to_grass)    { cell.* = .grass; },
-            else     => {},
+    const p: f64 = @floatCast(params.p.tree_growth);
+    if (p <= 0.0) return;
+    if (p >= 1.0) {
+        for (g.cells) |*cell| {
+            if (cell.* == .empty or cell.* == .ash) cell.* = .tree;
         }
+        return;
+    }
+
+    const log1mp = @log(1.0 - p);
+    const total = g.cells.len;
+    var i: usize = 0;
+    while (i < total) {
+        const u = @max(rng.float(f64), 1e-300);
+        const skip: usize = @intFromFloat(@floor(@log(u) / log1mp));
+        i += skip;
+        if (i >= total) break;
+        if (g.cells[i] == .empty or g.cells[i] == .ash) g.cells[i] = .tree;
+        i += 1;
     }
 }
 
-// Saplings and trees spread seeds to adjacent grass cells (patch growth),
-// plus a rare random drop anywhere on the map (wind dispersal).
-fn seedStep(g: *Grid, rng: std.Random) void {
-    const p = params.p;
-
-    var y: u32 = 0;
-    while (y < g.height) : (y += 1) {
-        var x: u32 = 0;
-        while (x < g.width) : (x += 1) {
-            const i = g.idx(x, y);
-            if (g.cells[i] != .sapling and g.cells[i] != .tree) continue;
-            if (x > 0)            trySeed(g, g.idx(x - 1, y), p.sapling_spread_chance, rng);
-            if (x < g.width - 1)  trySeed(g, g.idx(x + 1, y), p.sapling_spread_chance, rng);
-            if (y > 0)            trySeed(g, g.idx(x, y - 1), p.sapling_spread_chance, rng);
-            if (y < g.height - 1) trySeed(g, g.idx(x, y + 1), p.sapling_spread_chance, rng);
-        }
-    }
-
-    // Wind-blown seed: rare random drop anywhere on the map.
-    if (rng.float(f32) < p.sapling_random_chance) {
-        const wx = rng.intRangeLessThan(u32, 0, g.width);
-        const wy = rng.intRangeLessThan(u32, 0, g.height);
-        const i = g.idx(wx, wy);
-        if (g.cells[i] == .grass) g.cells[i] = .sapling;
-    }
-}
-
-fn trySeed(g: *Grid, i: usize, chance: f32, rng: std.Random) void {
-    if (g.cells[i] == .grass and rng.float(f32) < chance) {
-        g.cells[i] = .sapling;
-    }
-}
-
+// Per-tree lightning (canonical DS): each tree has independent probability f
+// per tick of being struck. Implemented with the same geometric-skip trick as
+// growth — we sample landing positions across all cells at rate f and ignite
+// the ones that happen to be trees.
 fn lightningStep(g: *Grid, rng: std.Random) void {
-    if (rng.float(f32) >= params.p.lightning_chance) return;
-    const x = rng.intRangeLessThan(u32, 0, g.width);
-    const y = rng.intRangeLessThan(u32, 0, g.height);
-    const i = g.idx(x, y);
-    if (isFlammable(g.cells[i])) ignite(g, i, rng);
+    const f: f64 = @floatCast(params.p.lightning_chance);
+    if (f <= 0.0) return;
+    if (f >= 1.0) {
+        for (g.cells, 0..) |cell, i| {
+            if (cell == .tree) g.igniteCell(i);
+        }
+        return;
+    }
+
+    const log1mf = @log(1.0 - f);
+    const total = g.cells.len;
+    var i: usize = 0;
+    while (i < total) {
+        const u = @max(rng.float(f64), 1e-300);
+        const skip: usize = @intFromFloat(@floor(@log(u) / log1mf));
+        i += skip;
+        if (i >= total) break;
+        if (g.cells[i] == .tree) g.igniteCell(i);
+        i += 1;
+    }
 }
 
+// List-based fire step: only iterate currently-burning cells (snapshot at
+// step start), spread to neighbors, then ash. New ignitions accumulate
+// at the tail of burning_indices and become the next tick's queue.
 fn fireStep(g: *Grid, rng: std.Random) void {
-    const p = params.p;
-    var y: u32 = 0;
-    while (y < g.height) : (y += 1) {
-        var x: u32 = 0;
-        while (x < g.width) : (x += 1) {
-            const i = g.idx(x, y);
-            if (g.cells[i] != .burning) continue;
+    const ignition = params.p.ignition_chance;
+    const start = g.burning_count;
+    if (start == 0) return;
 
-            if (g.fuel[i] == 0) {
-                g.cells[i] = .ash;
-                continue;
-            }
-            g.fuel[i] -= 1;
-
-            if (x > 0)            tryIgnite(g, g.idx(x - 1, y), p.ignition_chance, rng);
-            if (x < g.width - 1)  tryIgnite(g, g.idx(x + 1, y), p.ignition_chance, rng);
-            if (y > 0)            tryIgnite(g, g.idx(x, y - 1), p.ignition_chance, rng);
-            if (y < g.height - 1) tryIgnite(g, g.idx(x, y + 1), p.ignition_chance, rng);
-        }
+    var k: u32 = 0;
+    while (k < start) : (k += 1) {
+        const i = g.burning_indices[k];
+        const x = @as(u32, @intCast(i % g.width));
+        const y = @as(u32, @intCast(i / g.width));
+        if (x > 0)            tryIgnite(g, g.idx(x - 1, y), ignition, rng);
+        if (x < g.width - 1)  tryIgnite(g, g.idx(x + 1, y), ignition, rng);
+        if (y > 0)            tryIgnite(g, g.idx(x, y - 1), ignition, rng);
+        if (y < g.height - 1) tryIgnite(g, g.idx(x, y + 1), ignition, rng);
+        g.cells[i] = .ash;
     }
+
+    // Compact: shift the new ignitions (at [start, burning_count)) to the front.
+    const remaining = g.burning_count - start;
+    if (remaining > 0) {
+        std.mem.copyForwards(u32, g.burning_indices[0..remaining], g.burning_indices[start..start + remaining]);
+    }
+    g.burning_count = remaining;
 }
 
 fn tryIgnite(g: *Grid, i: usize, chance: f32, rng: std.Random) void {
-    if (isFlammable(g.cells[i]) and rng.float(f32) < chance) {
-        ignite(g, i, rng);
-    }
-}
-
-fn ignite(g: *Grid, i: usize, rng: std.Random) void {
-    const p = params.p;
-    g.cells[i] = .burning;
-    g.fuel[i] = p.fuel_min + rng.intRangeLessThan(u8, 0, p.fuel_max - p.fuel_min);
-}
-
-fn isFlammable(cell: Cell) bool {
-    return cell == .sapling or cell == .tree;
+    if (g.cells[i] == .tree and rng.float(f32) < chance) g.igniteCell(i);
 }

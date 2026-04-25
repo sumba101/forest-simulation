@@ -41,8 +41,6 @@ fn render(out: anytype, grid: *const Grid, tick: u64) !void {
         while (x < grid.width) : (x += 1) {
             const ch: u8 = switch (grid.get(x, y)) {
                 .empty   => ' ',
-                .grass   => '.',
-                .sapling => 't',
                 .tree    => 'T',
                 .burning => '*',
                 .ash     => '_',
@@ -51,6 +49,6 @@ fn render(out: anytype, grid: *const Grid, tick: u64) !void {
         }
         try out.writeAll("\n");
     }
-    try out.print("tick {d}  |  ' '=empty  .=grass  t=sapling  T=tree  *=fire  _=ash\n", .{tick});
+    try out.print("tick {d}  |  ' '=empty  T=tree  *=fire  _=ash\n", .{tick});
     try out.flush();
 }

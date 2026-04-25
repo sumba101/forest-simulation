@@ -1,0 +1,7 @@
+{
+  "name": "forest-simulation-server",
+  "type": "module",
+  "scripts": {
+    "start": "bun run index.ts"
+  }
+}

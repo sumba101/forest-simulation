@@ -1,0 +1,54 @@
+WHY THE DISTRIBUTION ISN'T A POWER LAW
+=======================================
+Date: 2026-04-24
+
+The short answer: our model has too many characteristic scales — the physics sets a
+preferred fire size rather than letting any size be equally likely.
+
+1. Lightning rate is far too high relative to tree growth
+---------------------------------------------------------
+The Drossel-Schwabl model (the theoretical SOC forest fire) requires f/p << 1 —
+lightning must be extremely rare compared to tree growth. This timescale separation
+is the entire mechanism: forests grow dense and interconnected before lightning
+strikes, so when a fire starts it burns through a giant cluster.
+
+Current values: sapling_to_tree = 0.0008, lightning_chance = 0.03.
+Per-tick, lightning is ~37x faster than any given sapling becoming a tree. The forest
+never accumulates large enough connected clusters for rare catastrophic fires, so all
+fires end up medium-sized — producing the hump in the chart, not a power-law tail.
+
+2. Growth pauses during fire
+-----------------------------
+The classic model runs growth and lightning simultaneously, every tick. The separation
+of timescales is emergent, not enforced. Our explicit growth pause during fire breaks
+the SOC mechanism: fires can't compete with new growth reaching into adjacent empty
+cells while they spread, which changes how cluster boundaries behave.
+
+3. Ignition probability = 0.4, not 1.0
+----------------------------------------
+The Drossel-Schwabl model uses ignition_chance = 1. Our 40% chance means fire
+frequently self-extinguishes before consuming a connected cluster. This introduces a
+characteristic patch size (set by the geometric distribution of spread failures),
+which peaks the distribution rather than flattening it.
+
+4. Grass as permanent firebreaks
+----------------------------------
+Grass cells are unburnable and cover a large fraction of the grid. This caps the
+maximum connected tree cluster size structurally — not through dynamics, but through
+geometry. A hard geometric cap means large fires are impossible regardless of tree
+density, cutting off the right tail of the distribution.
+
+5. Multi-tick fuel
+-------------------
+Real SOC models burn a cell in one step (tree → ash instantly). Our fuel_min=2 /
+fuel_max=6 lets a cell burn for up to 7 ticks. This adds a characteristic timescale
+to the burning process and a characteristic spatial scale to how far fire spreads
+from each cell.
+
+WHAT WOULD GIVE A POWER LAW
+=============================
+- Set lightning_chance to ~0.0005 (much rarer than growth)
+- Remove the growth pause during fire
+- Set ignition_chance to 1.0
+- Make grass burnable again (or remove grass entirely)
+- The dashed τ=1.5 reference line on the log-log chart shows the target slope

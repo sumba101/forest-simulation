@@ -12,8 +12,18 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
-
     b.installArtifact(exe);
+
+    const lib = b.addLibrary(.{
+        .name = "sim",
+        .linkage = .dynamic,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/lib.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+    b.installArtifact(lib);
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
