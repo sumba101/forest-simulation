@@ -33,6 +33,6 @@ Open **http://localhost:3000** in a browser.
 
 **Timescale separation** — controlled by `pause_on_fire` flag (default off). When on, growth and lightning are suspended while any cell is burning, enforcing the infinite timescale-separation limit where each recorded fire event is exactly one connected cluster.
 
-**SOC condition** — requires `f ≪ p` so the forest can regrow between strikes, and `p/f ≪ L²` so the correlation length fits inside the grid. Default: `p = 0.01`, `f = 1e-6`, `ignition = 0.85`.
+**SOC condition** — requires `f ≪ p` so the forest can regrow between strikes, and the mean cluster size `p/f` must fit well inside the total cell count (786,432 for 1024×768) so the power-law scaling region is visible before finite-size cutoff. Default: `p = 0.01`, `f = 1e-6` gives `p/f = 10,000`.
 
 **Fire recording** — fire size (cells burned) is recorded when `burning_count` drops to zero. Stored in a ring buffer of 4096 events and displayed as a log–log histogram with τ = 1.15 (canonical DS) and τ = 1.00 reference slopes.
