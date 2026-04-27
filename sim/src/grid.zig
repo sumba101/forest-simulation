@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub const MAX_FIRE_EVENTS: usize = 4096;
+pub const MAX_FIRE_EVENTS: usize = 1_000_000;
 
 pub const Cell = enum(u8) {
     empty = 0,
