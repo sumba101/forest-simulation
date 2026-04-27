@@ -161,19 +161,27 @@ function drawLogLog() {
 
   const NUM_BINS = 21;
   const bins = Array.from({ length: NUM_BINS }, (_, k) => ({
-    lo: 1 << k, hi: 1 << (k + 1), count: 0,
+    lo: 1 << k, hi: 1 << (k + 1), count: 0, sum: 0,
   }));
   for (const s of fireEvents) {
     if (s <= 0) continue;
     const k = Math.min(Math.floor(Math.log2(s)), NUM_BINS - 1);
     bins[k].count++;
+    bins[k].sum += s;
   }
   const active = bins.filter(b => b.count > 0);
   if (active.length === 0) return;
 
   const X_MIN = 1, X_MAX = W * H;
   const xMinL = Math.log10(X_MIN), xMaxL = Math.log10(X_MAX);
-  const maxNorm = active.reduce((m, b) => Math.max(m, b.count / n), 0);
+  
+  // Calculate true density and exact center of mass for X-axis
+  active.forEach(b => {
+    b.density = b.count / (n * (b.hi - b.lo));
+    b.mid = b.sum / b.count; 
+  });
+  const maxNorm = active.reduce((m, b) => Math.max(m, b.density), 0);
+  
   const yMaxL = Math.ceil(Math.log10(maxNorm) + 0.5);
   const yMinL = Math.log10(0.4 / n);
 
@@ -224,17 +232,14 @@ function drawLogLog() {
   ctx.save();
   ctx.translate(14, mt + ph/2); ctx.rotate(-Math.PI/2);
   ctx.fillStyle = "#5c6573"; ctx.font = "10.5px sans-serif"; ctx.textAlign = "center";
-  ctx.fillText("normalized count", 0, 0);
+  ctx.fillText("probability density", 0, 0); 
   ctx.restore();
 
-  // Reference power-law slopes, anchored to the largest-count bin.
-  // τ = 1.15 is the canonical 2D Drossel–Schwabl effective exponent
-  // (Grassberger '93/'02; Clar/Drossel/Schwabl '96).
-  // τ = 1.00 is the boundary "1/s" slope — flat on log-binned plots —
-  // which the simulation approaches when finite-size effects dominate.
-  const anchor = active.reduce((a, b) => b.count > a.count ? b : a);
-  const aMid = Math.sqrt(anchor.lo * anchor.hi);
-  const aNorm = anchor.count / n;
+  // Reference power-law slopes
+  // Anchor to the highest probability density (always the far left for power laws)
+  const anchor = active.reduce((a, b) => b.density > a.density ? b : a);
+  const aMid = anchor.mid;
+  const aNorm = anchor.density; 
 
   function drawSlope(tau, color) {
     ctx.setLineDash([4, 3]);
@@ -257,10 +262,9 @@ function drawLogLog() {
   ctx.strokeStyle = "rgba(240, 136, 62, 0.7)";
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  first = true;
+  let first = true; 
   for (const bin of active) {
-    const mid = Math.sqrt(bin.lo * bin.hi);
-    const cx = toX(mid), cy = toY(bin.count / n);
+    const cx = toX(bin.mid), cy = toY(bin.density); // Using exact bin.mid
     if (first) { ctx.moveTo(cx, cy); first = false; } else ctx.lineTo(cx, cy);
   }
   ctx.stroke();
@@ -268,9 +272,8 @@ function drawLogLog() {
   // dots
   ctx.fillStyle = "#f0883e";
   for (const bin of active) {
-    const mid = Math.sqrt(bin.lo * bin.hi);
     ctx.beginPath();
-    ctx.arc(toX(mid), toY(bin.count / n), 3.5, 0, Math.PI*2);
+    ctx.arc(toX(bin.mid), toY(bin.density), 3.5, 0, Math.PI*2); // Using exact bin.mid
     ctx.fill();
   }
 
@@ -298,7 +301,7 @@ function drawLogLog() {
   ctx.fillStyle = "#5c6573"; ctx.font = "10.5px ui-monospace, monospace";
   ctx.fillText(`n = ${n}`, ml + 6, mt + 12);
 
-  $("loglog-sub").textContent = `log–log binned · ${n} fires (ring buffer cap 4096)`;
+  $("loglog-sub").textContent = `log–log binned · ${n} fires`;
 }
 
 // ── Activity (time-series) chart ──────────────────────────────────────
